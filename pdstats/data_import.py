@@ -2,6 +2,9 @@
 
 import pandas as pd
 import numpy as np
+import yaml
+import pathlib
+import os
 
 
 class DataSeries:
@@ -20,7 +23,14 @@ class DataSeries:
         self.dt = vf(df.iloc[2:, col_idx])
         self.voltage = df.iloc[2:, col_idx + 1].to_numpy()  # type: np.ndarray
         self.pps = df.iloc[2:, col_idx + 2].to_numpy()  # type: np.ndarray
-        self.ratio_list = [1, 2, 3]
+
+        p = pathlib.Path(os.getcwd()).joinpath("config.yml")
+        try:
+            with open(p, "r") as stream:
+                data = yaml.load(stream)
+            self.ratio_list = data['std_ratio']
+        except IOError:
+            self.ratio_list = [1, 2, 3]
         self.report_list = dict()
 
     def analyze(self, ratio_factor):

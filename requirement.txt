@@ -6,10 +6,12 @@ numpy==1.18.2
 pandas==1.0.3
 pefile==2019.4.18
 psutil==5.7.0
+PyInstaller==3.6
 PySide2==5.14.2
 python-dateutil==2.8.1
 pytz==2019.3
 pywin32-ctypes==0.2.0
+PyYAML==5.3.1
 QDarkStyle==2.8.1
 QtPy==1.9.0
 shiboken2==5.14.2
