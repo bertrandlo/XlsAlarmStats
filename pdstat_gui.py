@@ -29,19 +29,30 @@ class MainWindow(QMainWindow):
 
     @QtCore.Slot(object)
     def update_treewidget(self, ds_report_list: dict):
+        print("ds_report_list: {}".format(ds_report_list))
+        root_item = QtWidgets.QTreeWidgetItem(self.ui.treeWidget, self.root_item)
+        #root_item = QtWidgets.QTreeWidgetItem()
 
-        for key in ds_report_list:
-            print(str(ds_report_list[key][0]))
-            item = QtWidgets.QTreeWidgetItem(self.ui.treeWidget, self.root_item)
-            item.setText(0, key+'x STD')
-            item.setText(1, ds_report_list[key][0])
-            item.setText(2, ds_report_list[key][1])
-            item.setText(3, ds_report_list[key][2])
-            item.setText(4, ds_report_list[key][3])
-            item.setText(5, ds_report_list[key][4])
-            for col in range(item.columnCount()):
-                item.setTextAlignment(col, QtCore.Qt.AlignCenter)
-            self.root_item.addChild(item)
+        for key, data in ds_report_list.items():
+            item = QtWidgets.QTreeWidgetItem()
+            item.setText(0, key)
+
+            for i, value in data.items():
+                info = QtWidgets.QTreeWidgetItem()
+                info.setText(0, i+'x STD')
+                info.setText(1, value[0])
+                info.setText(2, value[1])
+                info.setText(3, value[2])
+                info.setText(4, value[3])
+                info.setText(5, value[4])
+                for col in range(info.columnCount()):
+                    info.setTextAlignment(col, QtCore.Qt.AlignCenter)
+                item.addChild(info)
+
+            root_item.addChild(item)
+        self.ui.treeWidget.insertTopLevelItem(0, root_item)
+        self.ui.treeWidget.expandAll()
+        # self.ui.treeWidget.resizeColumnToContents(0)
 
     def dragEnterEvent(self, event):
         event.acceptProposedAction()
@@ -61,9 +72,9 @@ class MainWindow(QMainWindow):
 
             self.root_item = QtWidgets.QTreeWidgetItem(self.ui.treeWidget, self.ui.treeWidget.headerItem())
             self.root_item.setText(0, self.xls_filepath.name)
-            self.ui.treeWidget.resizeColumnToContents(0)
+            self.ui.treeWidget.setColumnWidth(0, 250)
             self.root_item.setText(1, "mean")
-            self.ui.treeWidget.setColumnWidth(1, 100)
+            self.ui.treeWidget.setColumnWidth(1, 250)
             self.root_item.setText(2, "std")
             self.ui.treeWidget.setColumnWidth(2, 100)
             self.root_item.setText(3, "threshold")
@@ -87,7 +98,7 @@ def worker_thread(job_queue: Queue, signal_update: Signal):
             if col[0:7] != 'Unnamed':
                 ds = DataSeries(df, idx, col)
                 ds.report()
-        signal_update.emit(ds.report_list)
+                signal_update.emit(ds.report_list)
 
 
 if __name__ == "__main__":

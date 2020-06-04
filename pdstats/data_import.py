@@ -52,7 +52,7 @@ class DataSeries:
     def get_voltage_threshold(self, ratio_factor):  # 門檻值必須介於 5 ~ 80 mv
         threshold = self.voltage.mean() + ratio_factor * self.voltage.std()
         if threshold <= 5:
-            return  5
+            return 5
         if threshold >= 80:
             return 80
         return threshold
@@ -76,10 +76,11 @@ class DataSeries:
 
     def report(self):
                 print("\n{}".format(self.device_name))
+                self.report_list[self.device_name] = dict()
                 for ratio in self.ratio_list:
                     self.analyze(ratio)
 
-                    self.report_list[str(ratio)] = [
+                    self.report_list[self.device_name][str(ratio)] = [
                         "{0:.1f}".format(self.voltage.mean()),
                         "{0:.1f}".format(self.voltage.std()),
                         "{0:.1f}".format(self.get_voltage_threshold(ratio)),
