@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import pandas as pd
 import numpy as np
 import yaml
@@ -18,6 +16,8 @@ class DataSeries:
         self.alarm_stats = None
         self.alarm_array = None
         self.lasting_minutes = None
+        self.max_mv = None
+        self.max_lasting = None
 
         vf = np.vectorize(lambda x: x.timestamp()/60)
         self.dt = vf(df.iloc[2:, col_idx])
@@ -27,6 +27,7 @@ class DataSeries:
         p = pathlib.Path(os.getcwd()).joinpath("config.yml")
         try:
             with open(p, "r") as stream:
+                data: dict
                 data = yaml.load(stream)
             self.ratio_list = data['std_ratio']
         except IOError:
@@ -49,20 +50,25 @@ class DataSeries:
         self.lasting_minutes = vf(self.alarm_stats[:, 1, ]) - vf(self.alarm_stats[:, 0, ])
         return self.alarm_stats
 
-    def get_voltage_threshold(self, ratio_factor):  # 門檻值必須介於 5 ~ 80 mv
+    def get_voltage_threshold(self, ratio_factor):  # 門檻值必須 >= 5
         threshold = self.voltage.mean() + ratio_factor * self.voltage.std()
+
         if threshold <= 5:
             return 5
-        if threshold >= 80:
-            return 80
+
+        if self.max_mv is not None and self.max_mv != 0 and threshold >= self.max_mv:
+            return self.max_mv
+
         return threshold
 
-    def get_max_lasting_minutes(self):  # 持續時間必須介於 20 ~ 1440 min
+    def get_max_lasting_minutes(self):  # 持續時間必須介於 20 ~ self.max_lasting min
         max_lasting_minute = np.amax(self.lasting_minutes)
         if max_lasting_minute <= 20:
             return 20
-        if max_lasting_minute >= 1440:
-            return 1440
+
+        if self.max_lasting is not None and self.max_lasting != 0 and max_lasting_minute >= self.max_lasting:
+            return self.max_lasting
+
         return max_lasting_minute
 
     def get_occurrence_node_mapping(self):
