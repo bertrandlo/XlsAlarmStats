@@ -9,7 +9,14 @@ from time import sleep
 
 class TestDataSeries(unittest.TestCase):
 
-    def test_dateteime_convert(self):
+    def test_read_ini_config(self):
+        import configparser
+
+        config = configparser.ConfigParser()
+        max_voltage = config.read('test_config.ini')
+        assert len(max_voltage) == 0
+
+    def test_datetime_convert(self):
         df = DataImporter.xls_import('SampleData.xlsx')
         for idx, col in enumerate(df.columns):
             if col[0:7] != 'Unnamed':
