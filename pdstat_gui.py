@@ -18,6 +18,7 @@ class MainWindow(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.ui.centralwidget.setAcceptDrops(True)
+        self.ui.recalculate.clicked.connect(lambda: self.recalculating())
         self.xls_filepath = None
         self.ds = None  # type: DataSeries
         self.job_queue = Queue()
@@ -26,6 +27,16 @@ class MainWindow(QMainWindow):
         self.worker_thread.start()
         self.signal_update.connect(self.update_treewidget)
         self.root_item = None
+
+    def recalculating(self):
+        if self.xls_filepath is None:
+            print("No last Excel file exist")
+            return
+
+        print(self.xls_filepath)
+        self.xls_filepath: pathlib.Path
+        self.append_new_job(QtCore.QUrl.fromLocalFile(str(self.xls_filepath.absolute())))
+
 
     @QtCore.Slot(object)
     def update_treewidget(self, ds_report_list: dict):
@@ -54,49 +65,57 @@ class MainWindow(QMainWindow):
         self.ui.treeWidget.expandAll()
         # self.ui.treeWidget.resizeColumnToContents(0)
 
+    def append_tree_item_header(self):
+        self.root_item = QtWidgets.QTreeWidgetItem(self.ui.treeWidget, self.ui.treeWidget.headerItem())
+        self.root_item.setText(0, self.xls_filepath.name)
+        self.ui.treeWidget.setColumnWidth(0, 250)
+        self.root_item.setText(1, "mean")
+        self.ui.treeWidget.setColumnWidth(1, 250)
+        self.root_item.setText(2, "std")
+        self.ui.treeWidget.setColumnWidth(2, 100)
+        self.root_item.setText(3, "threshold")
+        self.ui.treeWidget.setColumnWidth(3, 120)
+        self.root_item.setText(4, "Tmax")
+        self.ui.treeWidget.setColumnWidth(4, 180)
+        self.root_item.setText(5, "Alarm #")
+
+        for col in range(self.root_item.columnCount()):
+            self.root_item.setTextAlignment(col, QtCore.Qt.AlignCenter)
+
+    def append_new_job(self, url):
+        file_extension = pathlib.PurePath(url.toLocalFile()).suffix
+        print(file_extension)
+        if file_extension != '.xls' and file_extension != '.xlsx':
+            return
+        root = self.ui.treeWidget.invisibleRootItem()
+        for item in self.ui.treeWidget.selectedItems():
+            (item.parent() or root).removeChild(item)
+
+        self.xls_filepath = pathlib.Path(url.toLocalFile())
+        self.append_tree_item_header()
+        self.job_queue.put_nowait((self.xls_filepath,
+                                   int(self.ui.input_max_mv.text()),
+                                   int(self.ui.input_max_lasting_miniute.text())))
+
     def dragEnterEvent(self, event):
         event.acceptProposedAction()
 
     def dropEvent(self, event):
         url: QtCore.QUrl
         for url in event.mimeData().urls():
-            file_extension = pathlib.PurePath(url.toLocalFile()).suffix
-            print(file_extension)
-            if file_extension != '.xls' and file_extension != '.xlsx':
-                return
-            root = self.ui.treeWidget.invisibleRootItem()
-            for item in self.ui.treeWidget.selectedItems():
-                (item.parent() or root).removeChild(item)
-
-            self.xls_filepath = pathlib.Path(url.toLocalFile())
-
-            self.root_item = QtWidgets.QTreeWidgetItem(self.ui.treeWidget, self.ui.treeWidget.headerItem())
-            self.root_item.setText(0, self.xls_filepath.name)
-            self.ui.treeWidget.setColumnWidth(0, 250)
-            self.root_item.setText(1, "mean")
-            self.ui.treeWidget.setColumnWidth(1, 250)
-            self.root_item.setText(2, "std")
-            self.ui.treeWidget.setColumnWidth(2, 100)
-            self.root_item.setText(3, "threshold")
-            self.ui.treeWidget.setColumnWidth(3, 120)
-            self.root_item.setText(4, "Tmax")
-            self.ui.treeWidget.setColumnWidth(4, 180)
-            self.root_item.setText(5, "Alarm #")
-
-            for col in range(self.root_item.columnCount()):
-                self.root_item.setTextAlignment(col, QtCore.Qt.AlignCenter)
-
-            self.job_queue.put_nowait(self.xls_filepath)
+            self.append_new_job(url)
 
 
 def worker_thread(job_queue: Queue, signal_update: Signal):
     while True:
         xls_filepath: pathlib.Path
-        xls_filepath = job_queue.get(block=True)
+        xls_filepath, max_mv, max_lasting = job_queue.get(block=True)
         df = DataImporter.xls_import(xls_filepath)
         for idx, col in enumerate(df.columns):
             if col[0:7] != 'Unnamed':
                 ds = DataSeries(df, idx, col)
+                ds.max_mv = max_mv
+                ds.max_lasting = max_lasting
                 ds.report()
                 signal_update.emit(ds.report_list)
 
