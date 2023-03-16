@@ -37,8 +37,10 @@ class Ui_MainWindow(object):
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.centralwidget.setAcceptDrops(True)
+
         self.verticalLayout_2 = QVBoxLayout(self.centralwidget)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
+
         self.verticalLayout = QVBoxLayout()
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setSizeConstraint(QLayout.SetMaximumSize)
@@ -60,6 +62,49 @@ class Ui_MainWindow(object):
 
         self.verticalLayout.addWidget(self.treeWidget)
 
+        self.headerlayout = QHBoxLayout()
+        self.label1 = QLabel("Max Voltage")
+        self.label1.setFont(font)
+
+        self.label2 = QLabel("mv")
+        self.label2.setFont(font)
+        self.label2.setAlignment(Qt.AlignLeft)
+
+        self.input_max_mv = QLineEdit()
+        self.input_max_mv.setFont(font)
+        self.input_max_mv.setAlignment(Qt.AlignRight)
+        self.input_max_mv.setText("0")
+        self.input_max_mv.setFixedWidth(64)
+
+        self.label3 = QLabel("Lasting")
+        self.label3.setFont(font)
+
+        self.label4 = QLabel("min")
+        self.label4.setFont(font)
+        self.label4.setAlignment(Qt.AlignLeft)
+
+        self.input_max_lasting_miniute = QLineEdit()
+        self.input_max_lasting_miniute.setFont(font)
+        self.input_max_lasting_miniute.setAlignment(Qt.AlignRight)
+        self.input_max_lasting_miniute.setText("120")
+        self.input_max_lasting_miniute.setFixedWidth(64)
+
+        self.recalculate = QPushButton()
+        self.recalculate.setText("Re-Calculate")
+        self.recalculate.setFont(font)
+
+        self.headerlayout.addStretch(1)
+        self.headerlayout.addWidget(self.label1)
+        self.headerlayout.addWidget(self.input_max_mv)
+        self.headerlayout.addWidget(self.label2)
+
+        self.headerlayout.addWidget(self.label3)
+        self.headerlayout.addWidget(self.input_max_lasting_miniute)
+        self.headerlayout.addWidget(self.label4)
+
+        self.headerlayout.addWidget(self.recalculate)
+
+        self.verticalLayout_2.addLayout(self.headerlayout)
 
         self.verticalLayout_2.addLayout(self.verticalLayout)
 
