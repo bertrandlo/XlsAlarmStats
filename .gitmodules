@@ -1,0 +1,3 @@
+[submodule "pdcomponent"]
+	path = pdcomponent
+	url = https://bertrandlopds@bitbucket.org/pdssoftwarerd/pdcomponent.git
