@@ -75,17 +75,23 @@ class DataSeries:
         return np.fromfunction(lambda i, j: self.occurrence[self.alarm_stats[i, j]], (int(self.occurrence_node.size / 2), 2), dtype=int)
 
     def clean_series_endpoint(self):
-        if self.occurrence[self.occurrence_node[0]] == -1:  # 開頭就處於觸發狀態
-            self.occurrence_node = np.insert(self.occurrence_node, 0, 0)  # 標示數列開頭是節點
-        if self.occurrence[self.occurrence_node[-1]] == 1:
-            self.occurrence_node = np.append(self.occurrence_node, len(self.occurrence)-1)  # 標示數列尾端是節點
+        try:
+            if self.occurrence[self.occurrence_node[0]] == -1:  # 開頭就處於觸發狀態
+                self.occurrence_node = np.insert(self.occurrence_node, 0, 0)  # 標示數列開頭是節點
+            if self.occurrence[self.occurrence_node[-1]] == 1:
+                self.occurrence_node = np.append(self.occurrence_node, len(self.occurrence)-1)  # 標示數列尾端是節點
+        except IndexError:
+            raise IndexError("無法計算時間閾值！")
 
     def report(self):
                 print("\n{}".format(self.device_name))
                 self.report_list[self.device_name] = dict()
                 for ratio in self.ratio_list:
-                    self.analyze(ratio)
-
+                    try:
+                        self.analyze(ratio)
+                    except IndexError as e:
+                        print("Ratio={} - {}".format(ratio, str(e)))
+                        continue
                     self.report_list[self.device_name][str(ratio)] = [
                         "{0:.1f}".format(self.voltage.mean()),
                         "{0:.1f}".format(self.voltage.std()),
