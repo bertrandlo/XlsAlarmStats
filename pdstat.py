@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime
 import pandas as pd
 from pdstats.data_import import DataImporter, DataSeries
@@ -52,10 +53,10 @@ if __name__ == "__main__":
 
     if args.gno is not None:
         load_group_data(group_id=args.gno, dt_begin=args.begin, dt_end=args.end)
-        exit(0)
+        sys.exit()
 
     if args.file is not None:
         main(filename=args.file)
-        exit(0)
+        sys.exit()
 
     parser.print_help()
