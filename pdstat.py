@@ -4,6 +4,9 @@ import pandas as pd
 from pdstats.data_import import DataImporter, DataSeries
 from argparse import ArgumentParser
 from pdcomponent.data_entity import DataEntity
+from pdcomponent.customer import Customer
+from pdcomponent.station import Station
+from pdcomponent.device import Device
 
 
 def main(filename):
@@ -36,23 +39,42 @@ def load_group_data(group_id, dt_begin, dt_end):
             data.append([pdm.bdTime, pdm.bdMV, pdm.bdCount])
         df = pd.DataFrame(data)
         ds = DataSeries(df, 0, "{}_CH{}".format(dev.gName, ch))
+        ds.gno, ds.sno, ds.sname = dev.gNo, dev.sNo_link, dev.sName
         ds.report()
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser()
+    parser = ArgumentParser(add_help=True)
     group_file = parser.add_argument_group()
     group_file.add_argument("--file", help="loading xlsx file exported by PDSimply")
 
+    group_exclude = parser.add_mutually_exclusive_group(required=True)
+    group_exclude.add_argument("--gno", type=int, help="loading data from PUMO database by the specified group id")
+    group_exclude.add_argument("--sno", type=int, help="loading data from PUMO database by the specified station id")
+    group_exclude.add_argument("--cuno", type=int, help="loading data from PUMO database by the specified customer id")
+
     group_loading = parser.add_argument_group()
-    group_loading.add_argument("--gno", type=int, help="loading data from PUMO database")
-    group_loading.add_argument("--begin", type=str, help="begin datetime, max range 125 days.")
-    group_loading.add_argument("--end", type=str, help="end datetime")
+    group_loading.add_argument("--begin", type=str, help="begin datetime, max range 125 days., %Y-%m-%dT%H:%M:%S")
+    group_loading.add_argument("--end", type=str, help="end datetime, %Y-%m-%dT%H:%M:%S")
 
     args = parser.parse_args()
 
     if args.gno is not None:
         load_group_data(group_id=args.gno, dt_begin=args.begin, dt_end=args.end)
+        sys.exit()
+
+    if args.sno is not None:
+        st = Station(sNo=args.sno)
+        dev: Device
+        for dev in st.devices:
+            load_group_data(group_id=dev.gNo, dt_begin=args.begin, dt_end=args.end)
+        sys.exit()
+
+    if args.cuno is not None:
+        cu = Customer(cuNo=args.cuno)
+        dev: Device
+        for dev in cu.get_all_devices():
+            load_group_data(group_id=dev.gNo, dt_begin=args.begin, dt_end=args.end)
         sys.exit()
 
     if args.file is not None:

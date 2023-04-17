@@ -6,6 +6,9 @@ import os
 
 
 class DataSeries:
+    gno = None
+    sno = None
+    sname = None
     def __init__(self, df: pd.DataFrame, col_idx, device_name=None):
         if device_name is not None:
             self.device_name = device_name
@@ -84,7 +87,12 @@ class DataSeries:
             raise IndexError("無法計算時間閾值！")
 
     def report(self):
-                print("\n{}".format(self.device_name))
+                print("\ngroup no: {}  - group name: {}, station no: {}, station name: {}".format(
+                    self.gno,
+                    self.device_name,
+                    self.sno if self.sno is not None else " ",
+                    self.sname if self.sname is not None else " ",
+                ))
                 self.report_list[self.device_name] = dict()
                 for ratio in self.ratio_list:
                     try:
