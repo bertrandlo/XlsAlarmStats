@@ -85,14 +85,12 @@ class DataSeries:
             return 5
         return threshold
 
-    def get_max_lasting_minutes(self):  # 持續時間必須介於 20 ~ self.max_lasting min
+    def get_max_lasting_minutes(self):  # 持續時間預設必須介於 20 ~ 1440 min
         max_lasting_minute = np.amax(self.lasting_minutes)
-        if max_lasting_minute <= 20:
-            return 20
-
-        if self.max_lasting is not None and self.max_lasting != 0 and max_lasting_minute >= self.max_lasting:
-            return self.max_lasting
-
+        if max_lasting_minute is None or max_lasting_minute <= self.lasting_minutes_min:
+            return self.lasting_minutes_min
+        if max_lasting_minute >= self.lasting_minutes_max:
+            return self.lasting_minutes_max
         return max_lasting_minute
 
     def get_occurrence_node_mapping(self):
