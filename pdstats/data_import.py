@@ -65,7 +65,11 @@ class DataSeries:
         :param ratio_factor: 標準差倍數
         """
         threshold = self.get_voltage_threshold(ratio_factor)
-        self.alarm_array = np.where(self.voltage >= threshold, 1, 0)  # 將高於門檻值標示成 1 否則為 0
+        self.analyze_by_specific_voltage(threshold)
+        return self.alarm_stats
+
+    def analyze_by_specific_voltage(self, volt: float):
+        self.alarm_array = np.where(self.voltage >= volt, 1, 0)  # 將高於門檻值標示成 1 否則為 0
         self.occurrence = np.diff(self.alarm_array)  # 清理轉換成元素差值 n+1 - n
         self.occurrence_node = self.occurrence.nonzero()[0]  # 取得非零元素的索引形成 tuple
         self.clean_series_endpoint()  # 移除無用開頭或結尾處於 Alarm 狀態 -> 無從估計持續時間
@@ -74,17 +78,11 @@ class DataSeries:
         # round((ds.dt[alarm[1]].timestamp() - ds.dt[alarm[0]].timestamp()) / 60))
         vf = np.vectorize(lambda x: self.dt[x])
         self.lasting_minutes = vf(self.alarm_stats[:, 1, ]) - vf(self.alarm_stats[:, 0, ])
-        return self.alarm_stats
 
-    def get_voltage_threshold(self, ratio_factor):  # 門檻值必須 >= 5
+    def get_voltage_threshold(self, ratio_factor):  # 門檻值預設必須介於 5mV ~ 80mV
         threshold = self.voltage.mean() + ratio_factor * self.voltage.std()
-
         if threshold <= 5:
             return 5
-
-        if self.max_mv is not None and self.max_mv != 0 and threshold >= self.max_mv:
-            return self.max_mv
-
         return threshold
 
     def get_max_lasting_minutes(self):  # 持續時間必須介於 20 ~ self.max_lasting min
