@@ -123,14 +123,14 @@ class DataSeries:
                     self.sno if self.sno is not None else " ",
                     self.sname if self.sname is not None else " ",
                 ))
-                self.report_list[self.device_name] = dict()
+                self.report_list = dict()
                 for ratio in self.ratio_list:
                     try:
                         self.analyze(ratio)
                     except IndexError as e:
                         print("Ratio={} - {}".format(ratio, str(e)))
                         continue
-                    self.report_list[self.device_name][str(ratio)] = [
+                    self.report_list[str(ratio)] = [
                         "{0:.1f}".format(self.voltage.mean()),
                         "{0:.1f}".format(self.voltage.std()),
                         "{0:.1f}".format(self.get_voltage_threshold(ratio)),
