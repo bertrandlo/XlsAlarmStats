@@ -52,6 +52,14 @@ class DataSeries:
             self.ratio_list = [1, 2, 3]
         self.report_list = dict()
 
+    def __str__(self):
+        thresholding = []
+        for ratio in self.ratio_list:
+            thresholding.append("\"{}xSTD\"={:.1f}".format(ratio, self.voltage.mean() + self.voltage.std()*ratio))
+
+        return "{} - CH={} - radios={}, mean={:.1f}, std={:.1f}, {}".format(
+            self.device_name, self.channel, self.ratio_list, self.voltage.mean(), self.voltage.std(), ",".join(thresholding))
+
     def analyze(self, ratio_factor):
         """
         :param ratio_factor: 標準差倍數
