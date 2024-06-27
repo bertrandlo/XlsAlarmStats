@@ -30,6 +30,13 @@ class DataSeries:
         self.max_mv = None
         self.max_lasting = None
 
+        self.ratio_list: list = []
+
+        self.voltage_threshold_max = 80
+        self.voltage_threshold_min = 5
+        self.lasting_minutes_max = 1440
+        self.lasting_minutes_min = 20
+
         vf = np.vectorize(lambda x: x.timestamp()/60)
         self.dt = vf(df.iloc[2:, col_idx])
         self.voltage = df.iloc[2:, col_idx + 1].to_numpy()  # type: np.ndarray
