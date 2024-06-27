@@ -9,11 +9,19 @@ class DataSeries:
     gno = None
     sno = None
     sname = None
-    def __init__(self, df: pd.DataFrame, col_idx, device_name=None):
+    channel = None
+
+    def __init__(self, df: pd.DataFrame, col_idx, device_name=None, station_name=None):
         if device_name is not None:
             self.device_name = device_name
         else:
             self.device_name = df.columns[col_idx]
+
+        if station_name is not None:
+            self.station_name = station_name
+        else:
+            self.station_name = station_name
+
         self.occurrence = None
         self.occurrence_node = None
         self.alarm_stats = None
