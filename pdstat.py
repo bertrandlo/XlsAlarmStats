@@ -18,29 +18,41 @@ def main(filename):
             ds.report()
 
 
-def load_group_data(group_id, dt_begin, dt_end):
+def load_group_data(group_id, dt_begin, dt_end, device_instance=None, pre_evaluating_mv=5):
     from pdcomponent.device import Device
-    dev = Device(group_id)
+    if device_instance is None:
+        device_instance = Device(group_id)
+
     dt_begin = datetime.strptime(dt_begin, '%Y-%m-%dT%H:%M:%S')
     dt_end = datetime.strptime(dt_end, '%Y-%m-%dT%H:%M:%S')
-    if ((dt_begin-dt_end).days > 125) or ((dt_begin-dt_end).days < -125):
+    if ((dt_begin-dt_end).days > 180) or ((dt_begin-dt_end).days < -180):
         raise RuntimeError("Invalid Date Range!")
     print(group_id, dt_begin, dt_end)
-    dev.begin_datetime = dt_begin
-    dev.ending_datetime = dt_end
-    dev.load_trend_data()
+    device_instance.begin_datetime = dt_begin
+    device_instance.ending_datetime = dt_end
+    device_instance.load_trend_data()
 
-    for idx, ch in enumerate(dev.gChannel):
+    ds_dict = dict()
+
+    for idx, ch in enumerate(device_instance.gChannel):
         data = list()
         pdm: DataEntity
-        data.append(["{}_CH{}".format(dev.gName, ch), "", ""])
+        data.append(["{}_CH{}".format(device_instance.gName, ch), "", ""])
         data.append(["timestamp", "Magnitude", "Count"])
-        for row_count, pdm in enumerate(dev.trend_data.get(ch)):
+        for row_count, pdm in enumerate(device_instance.trend_data.get(ch)):
             data.append([pdm.bdTime, pdm.bdMV, pdm.bdCount])
         df = pd.DataFrame(data)
-        ds = DataSeries(df, 0, "{}_CH{}".format(dev.gName, ch))
-        ds.gno, ds.sno, ds.sname = dev.gNo, dev.sNo_link, dev.sName
+        ds = DataSeries(df, 0, device_name=device_instance.gName, station_name=device_instance.sName)
+        ds.channel = ch
+        ds.gno, ds.sno, ds.sname = device_instance.gNo, device_instance.sNo_link, device_instance.sName
+        try:
+            ds.analyze_by_specific_voltage(pre_evaluating_mv)
+        except IndexError:
+            print("Ignore.")
         ds.report()
+        ds_dict[ch] = ds
+
+    return ds_dict
 
 
 if __name__ == "__main__":
