@@ -93,6 +93,17 @@ class DataSeries:
             return self.lasting_minutes_max
         return max_lasting_minute
 
+    def count_occurrence(self, duration_min: int):
+        from datetime import datetime
+        occurrence = 0
+        occurrence_info = []
+        for event in self.alarm_stats:
+            if (event[1] - event[0]) >= duration_min:
+                occurrence = occurrence + 1
+                occurrence_info.append([datetime.fromtimestamp(self.dt[event[0]]*60), datetime.fromtimestamp(self.dt[event[1]]*60)])
+
+        return occurrence, occurrence_info
+
     def get_occurrence_node_mapping(self):
         return np.fromfunction(lambda i, j: self.occurrence[self.alarm_stats[i, j]], (int(self.occurrence_node.size / 2), 2), dtype=int)
 
