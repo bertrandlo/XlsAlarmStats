@@ -29,7 +29,7 @@ def load_group_data(group_id, dt_begin, dt_end, device_instance=None, pre_evalua
 
     dt_begin = datetime.strptime(dt_begin, '%Y-%m-%dT%H:%M:%S')
     dt_end = datetime.strptime(dt_end, '%Y-%m-%dT%H:%M:%S')
-    if ((dt_begin-dt_end).days > 180) or ((dt_begin-dt_end).days < -180):
+    if ((dt_begin-dt_end).days > 200) or ((dt_begin-dt_end).days < -200):
         raise RuntimeError("Invalid Date Range!")
     print(group_id, dt_begin, dt_end)
     device_instance.begin_datetime = dt_begin
