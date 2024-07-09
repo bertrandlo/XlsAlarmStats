@@ -38,3 +38,18 @@ class TestUMC8SAnalysis(unittest.TestCase):
         evaluating_thresholding("Report", target_list, dt_begin, dt_end,
                                 evaluating_duration_minutes, evaluating_mv, ratio_list)
 
+    def test_TSMC_AIService_validation_golden_set(self):
+        import requests
+        import pandas
+
+        api_url = "http://archive.pdcare.com:9998/getAnalysisByEvent"
+        df = pandas.read_csv('golden_samples_event.csv', sep=",", encoding="utf-8", header=None)
+        headers = {"Content-Type": "application/json"}
+        for idx, row in df.iterrows():
+            response = requests.post(api_url, headers=headers, data=json.dumps({"alarmID": int(row[1])}))
+            try:
+                result = [response.json()['note']['PRPDAnalysis'],response.json()['note']['trendAnalysis']]
+            except json.decoder.JSONDecodeError:
+                print(row[0], int(row[1]), int(row[2]), int(row[3]), int(row[4]), "Not Enough Data!")
+                continue
+            print(row[0], int(row[1]), int(row[2]), int(row[3]), int(row[4]), result)
