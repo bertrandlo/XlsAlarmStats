@@ -43,8 +43,11 @@ def load_group_data(group_id, dt_begin, dt_end, device_instance=None, pre_evalua
         pdm: DataEntity
         data.append(["{}_CH{}".format(device_instance.gName, ch), "", ""])
         data.append(["timestamp", "Magnitude", "Count"])
-        for row_count, pdm in enumerate(device_instance.trend_data.get(ch)):
-            data.append([pdm.bdTime, pdm.bdMV, pdm.bdCount])
+        try:
+            for row_count, pdm in enumerate(device_instance.trend_data.get(ch)):
+                data.append([pdm.bdTime, pdm.bdMV, pdm.bdCount])
+        except TypeError:
+            print("Ignore.")
         df = pd.DataFrame(data)
         ds = DataSeries(df, 0, device_name=device_instance.gName, station_name=device_instance.sName)
         ds.channel = ch
