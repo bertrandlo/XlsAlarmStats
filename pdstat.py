@@ -1,9 +1,13 @@
+import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import openpyxl
 import pandas as pd
+import csv
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import PatternFill, Alignment, Font
+from openpyxl.utils.exceptions import IllegalCharacterError
 
 from pdstats.data_import import DataImporter, DataSeries
 from argparse import ArgumentParser
@@ -23,13 +27,12 @@ def main(filename):
 
 
 def load_group_data(group_id, dt_begin, dt_end, device_instance=None, pre_evaluating_mv=5):
-    from pdcomponent.device import Device
     if device_instance is None:
         device_instance = Device(group_id)
 
     dt_begin = datetime.strptime(dt_begin, '%Y-%m-%dT%H:%M:%S')
     dt_end = datetime.strptime(dt_end, '%Y-%m-%dT%H:%M:%S')
-    if ((dt_begin-dt_end).days > 200) or ((dt_begin-dt_end).days < -200):
+    if ((dt_begin - dt_end).days > 400) or ((dt_begin - dt_end).days < -400):
         raise RuntimeError("Invalid Date Range!")
     print(group_id, dt_begin, dt_end)
     device_instance.begin_datetime = dt_begin
