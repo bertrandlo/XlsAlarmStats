@@ -148,3 +148,65 @@ class CustomerGrouping:
         return self.__str__()
 
 
+def load_csv(csv_file: Path):
+    import math
+    from pdcomponent.core import MysqlOverviewEntity
+    from pdcomponent import session
+
+    # https://stackoverflow.com/a/57824142 當預設欄位太少不足以完成自動解析時  將會觸發記憶體不足 可以直接指定一個較大的數值
+    column_names = [i for i in range(0, 2000)]
+    rows = pd.read_csv(csv_file, header=None, delimiter=',', quotechar="'", names=column_names)
+    tr_review = dict()
+
+    dt_fmt = '%Y-%m-%dT%H:%M:%S'
+    tz = datetime.timezone(offset=datetime.timedelta(hours=8))
+    tz_setter = pytz.timezone('Asia/Taipei')
+    ym_tag_list: list[str] = []
+    for idx, row in rows.iterrows():
+        gno = int(row[0])
+        channel_index = int(str(row[3]))
+        t = Triggering(gno, channel_index, int(str(row[6])[:-2]), int(str(row[7])[:-3]),
+                       mean=float(row[4]), std=float(row[5]))
+        ts_begin = tz_setter.localize(datetime.datetime.strptime(str(row[1]), dt_fmt))
+        ts_end = tz_setter.localize(datetime.datetime.strptime(str(row[2]), dt_fmt))
+        ym_tag_list = list(t.build_year_month_bins(begin=ts_begin, end=ts_end))
+        for event in row[8:]:
+            if type(event) is float and math.isnan(event):
+                continue
+            # 2024-01-21T23:37:34
+            t.append(datetime.datetime.strptime(event, dt_fmt))
+
+        if gno not in tr_review.keys():
+            tr_review['{}_{}'.format(gno, channel_index)] = []
+
+        tr_review['{}_{}'.format(gno, channel_index)].append(t)
+
+    cuno_grouping = dict()
+    customer_info = [u.__dict__ for u in session.query(MysqlCustomer).all()]
+    devices_overview = []
+    for r in session.query(MysqlOverviewEntity).all():
+        if r is not None:
+            devices_overview.append(r.__dict__)
+
+    for idx, tr_list in tr_review.items():
+        tr: Triggering
+        for tr in tr_list:  #if tr.check_over_triggering():
+            gno = tr.gno
+            dev_info = next(filter(lambda x: x['gNo'] == gno, devices_overview))
+            tr.cuNo = dev_info['cuNo_link']
+            cu_name = full2half(next(filter(lambda x: x['cuNo'] == tr.cuNo, customer_info))['cuName'])
+            tr.cuName = cu_name
+            tr.sName = full2half(dev_info['sName'])
+            tr.gName = full2half(dev_info['gName'])
+
+            if tr.cuNo not in cuno_grouping.keys():
+                cuno_grouping[tr.cuNo] = CustomerGrouping(tr.cuNo, cu_name)
+
+            grouping = cuno_grouping[tr.cuNo]
+            grouping.append(tr)
+            # print(tr)
+    print("===================================================================================")
+    header = CustomerGrouping.csv_column_header(ym_tag_list)
+    csv_rows = [elem.dump_csv_format() for k, elem in cuno_grouping.items()]
+    print(header + csv_rows)
+    return header, csv_rows
