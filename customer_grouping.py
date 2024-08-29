@@ -98,3 +98,53 @@ class Triggering:
         return self.__str__()
 
 
+class CustomerGrouping:
+    cuNo: int = None
+    cuName: str = None
+    stations: dict = None
+    devices: dict = None
+    triggering: list = None
+
+    def __init__(self, cuNo: int, cuName: str):
+        self.stations = dict()
+        self.devices = dict()
+        self.cuNo = cuNo
+        self.cuName = cuName
+        self.triggering = []
+
+    def append(self, tr: Triggering):
+        self.triggering.append(tr)
+        if tr.sName not in self.stations.keys():
+            self.stations[tr.cuName + ', ' + tr.sName] = []
+
+        self.stations[tr.cuName + ', ' + tr.sName].append(tr)
+        if tr.gName not in self.devices.keys():
+            self.devices[tr.cuName + ', ' + tr.sName + ', ' + tr.gName+ ', CH' + str(tr.channel)] = []
+
+        self.devices[tr.cuName + ', ' + tr.sName + ', ' + tr.gName + ', CH' + str(tr.channel)].append(tr)
+
+    @staticmethod
+    def csv_column_header(ym_tag_list: list):
+        return ['dev'] + ym_tag_list
+
+    def dump_csv_format(self):
+        result = []
+        trigger_list: list[Triggering]
+        for tag, trigger_list in sorted(self.devices.items()):
+            for trigger in trigger_list:
+                result.append([trigger.gno, trigger.channel, trigger.tag()] + [trigger.mean, trigger.std] +
+                              [len(dq) for dq in trigger.events_year_month.values()])
+
+        return result
+
+    def __str__(self):
+        result = []
+        for k, v in sorted(self.devices.items()):
+            result.append('{}:{}'.format(k, v))
+
+        return str.join('\n', result)
+
+    def __repr__(self):
+        return self.__str__()
+
+
