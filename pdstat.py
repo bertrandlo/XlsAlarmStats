@@ -65,7 +65,8 @@ def load_group_data(group_id, dt_begin, dt_end, device_instance=None, pre_evalua
     return ds_dict
 
 
-def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_end, evaluating_duration_minutes, evaluating_mv, ratio_list):
+def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_end, evaluating_duration_minutes,
+                            evaluating_mv, ratio_list):
     fromFmt = "%Y-%m-%dT%H:%M:%S"
     toFmt = "%Y-%m-%dT:%H:%M:%S"
     row_offset = 1
@@ -82,15 +83,28 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
                                      "{:.1f}".format((dev_idx + 1) / len(target_list) * 100)))
         target = dev.gNo
         ds_dict: dict
-        ds_dict = load_group_data(group_id=target, dt_begin=dt_begin, dt_end=dt_end, device_instance=dev)
+        try:
+            ds_dict = load_group_data(group_id=target, dt_begin=dt_begin, dt_end=dt_end, device_instance=dev)
+        except ValueError as e:
+            logging.error("gNo={}, sta={}, {} loading data exception, ignored continue to next device.",
+                          target, dev.sName, dev.gName)
+            logging.error(e)
+            continue
 
         ts_begin = datetime.strptime(dt_begin, fromFmt)
         ts_end = datetime.strptime(dt_end, fromFmt)
 
         section_title = "{}_{}_{}".format(target, ts_begin.strftime(toFmt), ts_end.strftime(toFmt))
         ws.cell(row_offset, 1).value = section_title
-        ws.cell(row_offset, 8).value = dev.sName
-        ws.cell(row_offset, 9).value = dev.gName
+        try:
+            ws.cell(row_offset, 8).value = dev.sName
+        except IllegalCharacterError:
+            ws.cell(row_offset, 8).value = ILLEGAL_CHARACTERS_RE.sub(r'', dev.sName)
+        try:
+            ws.cell(row_offset, 9).value = dev.gName
+        except IllegalCharacterError:
+            ws.cell(row_offset, 9).value = ILLEGAL_CHARACTERS_RE.sub(r'', dev.gName)
+
         ws.merge_cells(start_row=row_offset + 1, end_row=row_offset + 1, start_column=5,
                        end_column=(4 + 3 * len(ratio_list)))
 
@@ -113,6 +127,9 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
             ws.cell(row_offset + 2, 5 + raio_idx * 3 + 2).value = "#"
             ws.cell(row_offset + 2, 5 + raio_idx * 3 + 2).alignment = Alignment(horizontal='center')
 
+        voltage_mean = dict()
+        voltage_std = dict()
+
         for idx, channel in enumerate(dev.gChannel):
             ds = ds_dict[channel]
             ds.ratio_list = ratio_list
@@ -121,9 +138,12 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
             print(ds)
             ds.report()
 
+            voltage_mean[channel] = float(f"{ds.voltage.mean():.1f}")
+            voltage_std[channel] = float(f"{ds.voltage.std():.1f}")
+
             ws.cell(row_offset + 3 + idx, 2).value = channel
-            ws.cell(row_offset + 3 + idx, 3).value = float(f"{ds.voltage.mean():.1f}")
-            ws.cell(row_offset + 3 + idx, 4).value = float(f"{ds.voltage.std():.1f}")
+            ws.cell(row_offset + 3 + idx, 3).value = float(f"{voltage_mean[channel]:.1f}")
+            ws.cell(row_offset + 3 + idx, 4).value = float(f"{voltage_std[channel]:.1f}")
 
             stat_info = [ds.device_name + "_CH" + str(channel), f"{ds.voltage.mean():.1f}",
                          f"{ds.voltage.std():.1f}"]
