@@ -1,9 +1,13 @@
+import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import openpyxl
 import pandas as pd
+import csv
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import PatternFill, Alignment, Font
+from openpyxl.utils.exceptions import IllegalCharacterError
 
 from pdstats.data_import import DataImporter, DataSeries
 from argparse import ArgumentParser
@@ -23,13 +27,12 @@ def main(filename):
 
 
 def load_group_data(group_id, dt_begin, dt_end, device_instance=None, pre_evaluating_mv=5):
-    from pdcomponent.device import Device
     if device_instance is None:
         device_instance = Device(group_id)
 
     dt_begin = datetime.strptime(dt_begin, '%Y-%m-%dT%H:%M:%S')
     dt_end = datetime.strptime(dt_end, '%Y-%m-%dT%H:%M:%S')
-    if ((dt_begin-dt_end).days > 200) or ((dt_begin-dt_end).days < -200):
+    if ((dt_begin - dt_end).days > 400) or ((dt_begin - dt_end).days < -400):
         raise RuntimeError("Invalid Date Range!")
     print(group_id, dt_begin, dt_end)
     device_instance.begin_datetime = dt_begin
@@ -62,7 +65,8 @@ def load_group_data(group_id, dt_begin, dt_end, device_instance=None, pre_evalua
     return ds_dict
 
 
-def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_end, evaluating_duration_minutes, evaluating_mv, ratio_list):
+def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_end, evaluating_duration_minutes,
+                            evaluating_mv, ratio_list):
     fromFmt = "%Y-%m-%dT%H:%M:%S"
     toFmt = "%Y-%m-%dT:%H:%M:%S"
     row_offset = 1
@@ -79,15 +83,28 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
                                      "{:.1f}".format((dev_idx + 1) / len(target_list) * 100)))
         target = dev.gNo
         ds_dict: dict
-        ds_dict = load_group_data(group_id=target, dt_begin=dt_begin, dt_end=dt_end, device_instance=dev)
+        try:
+            ds_dict = load_group_data(group_id=target, dt_begin=dt_begin, dt_end=dt_end, device_instance=dev)
+        except ValueError as e:
+            logging.error("gNo={}, sta={}, {} loading data exception, ignored continue to next device.",
+                          target, dev.sName, dev.gName)
+            logging.error(e)
+            continue
 
         ts_begin = datetime.strptime(dt_begin, fromFmt)
         ts_end = datetime.strptime(dt_end, fromFmt)
 
         section_title = "{}_{}_{}".format(target, ts_begin.strftime(toFmt), ts_end.strftime(toFmt))
         ws.cell(row_offset, 1).value = section_title
-        ws.cell(row_offset, 8).value = dev.sName
-        ws.cell(row_offset, 9).value = dev.gName
+        try:
+            ws.cell(row_offset, 8).value = dev.sName
+        except IllegalCharacterError:
+            ws.cell(row_offset, 8).value = ILLEGAL_CHARACTERS_RE.sub(r'', dev.sName)
+        try:
+            ws.cell(row_offset, 9).value = dev.gName
+        except IllegalCharacterError:
+            ws.cell(row_offset, 9).value = ILLEGAL_CHARACTERS_RE.sub(r'', dev.gName)
+
         ws.merge_cells(start_row=row_offset + 1, end_row=row_offset + 1, start_column=5,
                        end_column=(4 + 3 * len(ratio_list)))
 
@@ -110,6 +127,9 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
             ws.cell(row_offset + 2, 5 + raio_idx * 3 + 2).value = "#"
             ws.cell(row_offset + 2, 5 + raio_idx * 3 + 2).alignment = Alignment(horizontal='center')
 
+        voltage_mean = dict()
+        voltage_std = dict()
+
         for idx, channel in enumerate(dev.gChannel):
             ds = ds_dict[channel]
             ds.ratio_list = ratio_list
@@ -118,9 +138,12 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
             print(ds)
             ds.report()
 
+            voltage_mean[channel] = float(f"{ds.voltage.mean():.1f}")
+            voltage_std[channel] = float(f"{ds.voltage.std():.1f}")
+
             ws.cell(row_offset + 3 + idx, 2).value = channel
-            ws.cell(row_offset + 3 + idx, 3).value = float(f"{ds.voltage.mean():.1f}")
-            ws.cell(row_offset + 3 + idx, 4).value = float(f"{ds.voltage.std():.1f}")
+            ws.cell(row_offset + 3 + idx, 3).value = float(f"{voltage_mean[channel]:.1f}")
+            ws.cell(row_offset + 3 + idx, 4).value = float(f"{voltage_std[channel]:.1f}")
 
             stat_info = [ds.device_name + "_CH" + str(channel), f"{ds.voltage.mean():.1f}",
                          f"{ds.voltage.std():.1f}"]
@@ -154,11 +177,32 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
             ds = ds_dict[channel]
             row_offset = row_offset + 1
             ws.cell(row_offset, 2).value = channel
-
+            dt_shift = timedelta(minutes=max(evaluating_duration_minutes))
             for idx, _min_ in enumerate(evaluating_duration_minutes):
                 try:
                     ds.analyze_by_specific_voltage(evaluating_mv)
-                    o = ds.count_occurrence(_min_)[0]
+                    o, occurrence_info = ds.count_occurrence(_min_)
+                except IndexError:
+                    with open('occurrence_info.csv', 'a', newline='') as csvfile:
+                        writer = csv.writer(csvfile, delimiter=',', quotechar="'")
+                        writer.writerow([dev.gNo, dt_begin, dt_end,
+                                         channel,
+                                         voltage_mean[channel],
+                                         voltage_std[channel],
+                                         str(evaluating_mv) + "mv",
+                                         str(max(evaluating_duration_minutes)) + "min", "-1"])
+                    continue
+                try:
+                    with open('occurrence_info.csv', 'a', newline='') as csvfile:
+                        writer = csv.writer(csvfile, delimiter=',', quotechar="'")
+                        writer.writerow([dev.gNo, dt_begin, dt_end,
+                                         channel,
+                                         voltage_mean[channel],
+                                         voltage_std[channel],
+                                         str(evaluating_mv) + "mv",
+                                         str(max(evaluating_duration_minutes)) + "min"] + [
+                                            (dt_pair[0] + dt_shift).isoformat(timespec="seconds") for dt_pair in
+                                            occurrence_info])
                     ws.cell(row_offset, 4 + idx).value = o
                 except IndexError as e:
                     print(e)
@@ -184,11 +228,11 @@ if __name__ == "__main__":
 
     group_minutes_list = parser.add_argument_group()
     group_minutes_list.add_argument("--minutes", nargs="+", type=int,
-                               help="minutes set for evaluating trigger count, default 10 15 20 25 30")
+                                    help="minutes set for evaluating trigger count, default 10 15 20 25 30")
 
     group_ratio_list = parser.add_argument_group()
     group_ratio_list.add_argument("--ratio", nargs="+", type=float,
-                               help="std ratio set for evaluating thresholding count, default 1.0 2.0 3.0")
+                                  help="std ratio set for evaluating thresholding count, default 1.0 2.0 3.0")
 
     group_evaluating_mv = parser.add_argument_group()
     group_evaluating_mv.add_argument("--eval_mv", type=int, help="mv for evaluating trigger count, default 30")
