@@ -177,11 +177,32 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
             ds = ds_dict[channel]
             row_offset = row_offset + 1
             ws.cell(row_offset, 2).value = channel
-
+            dt_shift = timedelta(minutes=max(evaluating_duration_minutes))
             for idx, _min_ in enumerate(evaluating_duration_minutes):
                 try:
                     ds.analyze_by_specific_voltage(evaluating_mv)
-                    o = ds.count_occurrence(_min_)[0]
+                    o, occurrence_info = ds.count_occurrence(_min_)
+                except IndexError:
+                    with open('occurrence_info.csv', 'a', newline='') as csvfile:
+                        writer = csv.writer(csvfile, delimiter=',', quotechar="'")
+                        writer.writerow([dev.gNo, dt_begin, dt_end,
+                                         channel,
+                                         voltage_mean[channel],
+                                         voltage_std[channel],
+                                         str(evaluating_mv) + "mv",
+                                         str(max(evaluating_duration_minutes)) + "min", "-1"])
+                    continue
+                try:
+                    with open('occurrence_info.csv', 'a', newline='') as csvfile:
+                        writer = csv.writer(csvfile, delimiter=',', quotechar="'")
+                        writer.writerow([dev.gNo, dt_begin, dt_end,
+                                         channel,
+                                         voltage_mean[channel],
+                                         voltage_std[channel],
+                                         str(evaluating_mv) + "mv",
+                                         str(max(evaluating_duration_minutes)) + "min"] + [
+                                            (dt_pair[0] + dt_shift).isoformat(timespec="seconds") for dt_pair in
+                                            occurrence_info])
                     ws.cell(row_offset, 4 + idx).value = o
                 except IndexError as e:
                     print(e)
@@ -207,11 +228,11 @@ if __name__ == "__main__":
 
     group_minutes_list = parser.add_argument_group()
     group_minutes_list.add_argument("--minutes", nargs="+", type=int,
-                               help="minutes set for evaluating trigger count, default 10 15 20 25 30")
+                                    help="minutes set for evaluating trigger count, default 10 15 20 25 30")
 
     group_ratio_list = parser.add_argument_group()
     group_ratio_list.add_argument("--ratio", nargs="+", type=float,
-                               help="std ratio set for evaluating thresholding count, default 1.0 2.0 3.0")
+                                  help="std ratio set for evaluating thresholding count, default 1.0 2.0 3.0")
 
     group_evaluating_mv = parser.add_argument_group()
     group_evaluating_mv.add_argument("--eval_mv", type=int, help="mv for evaluating trigger count, default 30")
