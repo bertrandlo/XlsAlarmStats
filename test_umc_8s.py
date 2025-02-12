@@ -2,7 +2,6 @@ import datetime
 import pickle
 from pathlib import Path
 
-import numpy
 import numpy as np
 import json
 import unittest
@@ -12,7 +11,10 @@ from matplotlib.ticker import FormatStrFormatter
 
 from customer_grouping import load_csv
 from pdstat import evaluating_thresholding
-import pandas as pd
+
+from pdcomponent.device import Device
+from pdcomponent.storekeeper import StoreKeeper
+from datetime import timezone, timedelta
 
 
 class TestUMC8SAnalysis(unittest.TestCase):
@@ -155,7 +157,21 @@ class TestUMC8SAnalysis(unittest.TestCase):
             Device(7540), Device(7550), Device(7551), Device(7552), Device(7602),
             Device(7619), Device(7620), Device(7621), Device(7622), Device(7623),
             Device(7797), Device(7798), Device(14639), Device(14642), Device(14656),
-            Device(14657), Device(14658)
+            Device(14657), Device(14658),
+
+            # USC 12x
+            Device(9405), Device(9406), Device(9407), Device(9408), Device(9409), Device(9410),
+            Device(9429), Device(9431), Device(9432), Device(9433), Device(9437), Device(9438),
+            Device(9439), Device(9443), Device(9444), Device(9445), Device(9449), Device(9450),
+            Device(9451), Device(9455), Device(13823), Device(9457), Device(9459), Device(9482),
+            Device(9483), Device(9484), Device(9485), Device(9486), Device(9487), Device(9488),
+            Device(9489), Device(9490), Device(9509), Device(9510), Device(9511),
+            Device(13261), Device(13262), Device(13263), Device(13264), Device(13269), Device(13270),
+            Device(13825), Device(13914), Device(13915), Device(13916), Device(13917), Device(14873),
+            Device(14874), Device(16389), Device(16390), Device(16391), Device(16392), Device(15380),
+
+            # 和艦
+            Device(13090), Device(13186), Device(13216), Device(13236), Device(14492)
         ]
 
         ratio_list = [0.5, 1, 2]
@@ -698,6 +714,7 @@ class TestUMC8SAnalysis(unittest.TestCase):
                             result[idx] = result[idx] + 1
 
         print(result)
+
 
 def month_slot(alarm_map, nano):
     return ((alarm_map[str(nano)].naTime.year - 2023)*12 + (alarm_map[str(nano)].naTime.month - 6))

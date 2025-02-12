@@ -118,10 +118,13 @@ class CustomerGrouping:
             self.stations[tr.cuName + ', ' + tr.sName] = []
 
         self.stations[tr.cuName + ', ' + tr.sName].append(tr)
+        condition_tag = (tr.cuName + ', ' + tr.sName + ', ' + tr.gName + ', CH' + str(tr.channel) + '_' +
+                         str(tr.threshold_mv) + 'mv_' + str(tr.threshold_minutes) + 'min')
+        
         if tr.gName not in self.devices.keys():
-            self.devices[tr.cuName + ', ' + tr.sName + ', ' + tr.gName+ ', CH' + str(tr.channel)] = []
+            self.devices[condition_tag] = []
 
-        self.devices[tr.cuName + ', ' + tr.sName + ', ' + tr.gName + ', CH' + str(tr.channel)].append(tr)
+        self.devices[condition_tag].append(tr)
 
     @staticmethod
     def csv_column_header(ym_tag_list: list):
@@ -132,7 +135,8 @@ class CustomerGrouping:
         trigger_list: list[Triggering]
         for tag, trigger_list in sorted(self.devices.items()):
             for trigger in trigger_list:
-                result.append([trigger.gno, trigger.channel, trigger.tag()] + [trigger.mean, trigger.std] +
+                result.append([trigger.gno, trigger.channel, trigger.tag()] +
+                              [trigger.mean, trigger.std, trigger.threshold_mv, trigger.threshold_minutes] +
                               [len(dq) for dq in trigger.events_year_month.values()])
 
         return result
