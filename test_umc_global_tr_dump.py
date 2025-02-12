@@ -465,3 +465,409 @@ from pdstats.data_import import DataSeries
         ]
 """
 
+
+def month_slot(alarm_map, nano):
+    return ((alarm_map[str(nano)].naTime.year - 2023)*12 + (alarm_map[str(nano)].naTime.month - 6))
+
+
+def packing_dataframe(device_instance: Device, pre_evaluating_mv=5):
+
+    print(device_instance.gNo, device_instance.gName, device_instance.begin_datetime, device_instance.ending_datetime)
+
+    ds_dict = dict()
+
+    for idx, ch in enumerate(device_instance.gChannel):
+        data = list()
+        pdm: DataEntity
+        data.append(["{}_CH{}".format(device_instance.gName, ch), "", ""])
+        data.append(["timestamp", "Magnitude", "Count"])
+        try:
+            for row_count, pdm in enumerate(device_instance.trend_data.get(ch)):
+                data.append([pdm.bdTime, pdm.bdMV, pdm.bdCount])
+        except TypeError:
+            print("Ignore.")
+        df = pd.DataFrame(data)
+        ds = DataSeries(df, 0, device_name=device_instance.gName, station_name=device_instance.sName)
+        ds.channel = ch
+        ds.gno, ds.sno, ds.sname = device_instance.gNo, device_instance.sNo_link, device_instance.sName
+        try:
+            ds.analyze_by_specific_voltage(pre_evaluating_mv)
+        except IndexError:
+            print("Ignore.")
+        ds.report()
+        ds_dict[ch] = ds
+
+    return ds_dict
+
+
+def evaluating_thresholding(pickle_path: Path, evaluating_duration_minutes: list, evaluating_mini_volt: list):
+    csv_rows = []
+
+    ratio_list = [0]
+    ds_dict: dict
+    sk = StoreKeeper()
+    dev: Device
+    dev = sk.load_pickle_object(pickle_path)
+    # 將 DEVICE.begin_datetime 與 DEVICE.ending_datetime 限制成嚴格 ISO8601 短格式
+    tz_info = timezone(timedelta(hours=8, minutes=0))
+    dev.begin_datetime.astimezone(tz_info)
+    dev.ending_datetime.astimezone(tz_info)
+
+    dt_begin = dev.begin_datetime.isoformat()
+    dt_end = dev.ending_datetime.isoformat()
+    target = dev.gNo
+
+    try:
+        ds_dict = packing_dataframe(device_instance=dev, pre_evaluating_mv=5)
+    except ValueError as e:
+        print("gNo={}, sta={}, {} loading data exception, ignored continue to next device."
+              .format(target, dev.sName, dev.gName))
+        logging.error("gNo={}, sta={}, {} loading data exception, ignored continue to next device.",
+                      target, dev.sName, dev.gName)
+        logging.error(e)
+
+    voltage_mean = dict()
+    voltage_std = dict()
+
+    for idx, channel in enumerate(dev.gChannel):
+        ds = ds_dict[channel]
+        ds.ratio_list = ratio_list
+        ds.voltage_threshold_min = 1
+        ds.lasting_minutes_min = 3
+        print(ds)
+        ds.report()
+
+        voltage_mean[channel] = float(f"{ds.voltage.mean():.1f}")
+        voltage_std[channel] = float(f"{ds.voltage.std():.1f}")
+
+    print(dev.sName + "__" + dev.gName)
+
+    for evaluating_mv in evaluating_mini_volt:
+        for ch_idx, channel in enumerate(dev.gChannel):
+            ds = ds_dict[channel]
+
+            for min_idx, _min_ in enumerate(sorted(evaluating_duration_minutes)):
+                dt_shift = timedelta(minutes=_min_)
+                try:
+                    ds.analyze_by_specific_voltage(evaluating_mv)
+                    o, occurrence_info = ds.count_occurrence(_min_)
+                except IndexError:
+                    csv_rows.append([dev.gNo, dt_begin, dt_end,
+                                         channel,
+                                         voltage_mean[channel],
+                                         voltage_std[channel],
+                                         str(evaluating_mv) + "mv",
+                                         str(_min_) + "min", "-1"])
+                    continue
+
+                try:
+                    csv_rows.append([dev.gNo, dt_begin, dt_end,
+                                     channel,
+                                     voltage_mean[channel],
+                                     voltage_std[channel],
+                                     str(evaluating_mv) + "mv",
+                                     str(_min_) + "min"] + [
+                                        (dt_pair[0] + dt_shift).isoformat(timespec="seconds") for dt_pair in
+                                        occurrence_info])
+                except IndexError as e:
+                    print(e)
+            del ds
+
+    return csv_rows
+
+
+class TestUMC8SAnalysis(unittest.TestCase):
+    def test_dump_global_seec_tr(self):
+        target_list = [
+            # 12AP3P4
+            Device(12870), Device(12871), Device(12872),
+            Device(12876), Device(12877), Device(12878),
+            Device(12879), Device(12880), Device(12881),
+            Device(12873), Device(12874), Device(12875),
+            Device(12961), Device(12962), Device(12963),
+            Device(12966), Device(12967), Device(12968),
+            Device(13001), Device(13002), Device(13003),
+            Device(13006), Device(13007), Device(13008),
+            Device(12971), Device(12972), Device(12973),
+            Device(12976), Device(12977), Device(12978),
+            Device(12981), Device(12982), Device(12983),
+            Device(12986), Device(12987), Device(12988),
+            Device(12991), Device(12992), Device(12993),
+            Device(12996), Device(12997), Device(12998),
+            Device(13011), Device(13012), Device(13013),
+            # 12AP5P6
+            Device(15812), Device(15814), Device(6694),
+            # 8AB
+            Device(11543), Device(11454), Device(11552), Device(11555),
+            # 8CD
+            Device(10771), Device(10772), Device(10773), Device(10194), Device(11307), Device(11310),
+            Device(11262), Device(10184), Device(10185), Device(11289), Device(10189), Device(11292)
+        ]
+
+        tz = timezone(timedelta(hours=+8))
+        sk = StoreKeeper()
+
+        for idx, dev in enumerate(target_list):
+            print("Loading {} - {}, {:2.0f}%".format(dev.gNo, dev.gName, (idx+1)*100/len(target_list)))
+            dev.begin_datetime = datetime.datetime(2023, 6, 1, 0, 0, 0,tzinfo=tz)
+            dev.ending_datetime = datetime.datetime(2024, 5, 31, 0, 0, 0, tzinfo=tz)
+            #dev.load_trend_data()
+            #sk.pickle_device_data(dev)
+
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+def parsing_csv(rows: pd.DataFrame):
+    tr_review = dict()
+    dt_fmt = '%Y-%m-%dT%H:%M:%S'
+    ym_tag_list: list[str] = []
+    for idx, row in rows.iterrows():
+        gno = int(row['gno'])
+        channel_index = int(str(row['ch']))
+        th_mv, th_min = row['th_mv'], row['th_min']
+        t = Triggering(gno, channel_index, int(str(row['th_mv'])[:-2]), int(str(row['th_min'])[:-3]),
+                       mean=float(row['mean']), std=float(row['std']))
+
+        ts_begin = datetime.datetime.fromisoformat(row['dt_begin'])
+        ts_end = datetime.datetime.fromisoformat(row['dt_end'])
+
+        ym_tag_list = list(t.build_year_month_bins(begin=ts_begin, end=ts_end))
+
+        tr_review['{}_{}_{}mv_{}min'.format(gno, channel_index, th_mv, th_min)] = []
+
+        for event in row.iloc[8:]:
+            if event == '-1' or event == '-1.0' or type(event) is bool or (type(event) is float and math.isnan(event)):
+                continue
+            # 2024-01-21T23:37:34
+            try:
+                t.append(datetime.datetime.strptime(event, dt_fmt))
+            except TypeError:
+                continue
+
+        tr_review['{}_{}_{}mv_{}min'.format(gno, channel_index, th_mv, th_min)].append(t)
+
+    cuno_grouping = dict()
+    customer_info = [u.__dict__ for u in session.query(MysqlCustomer).all()]
+    devices_overview = []
+    for r in session.query(MysqlOverviewEntity).all():
+        if r is not None:
+            devices_overview.append(r.__dict__)
+
+    for idx, tr_list in tr_review.items():
+        tr: Triggering
+        for tr in tr_list:  # if tr.check_over_triggering():
+            gno = tr.gno
+            dev_info = next(filter(lambda x: x['gNo'] == gno, devices_overview))
+            tr.cuNo = dev_info['cuNo_link']
+            cu_name = full2half(next(filter(lambda x: x['cuNo'] == tr.cuNo, customer_info))['cuName'])
+            tr.cuName = str.strip(cu_name)
+            tr.sName = full2half(str.strip(dev_info['sName']))
+            tr.gName = full2half(str.strip(dev_info['gName']))
+
+            if tr.cuNo not in cuno_grouping.keys():
+                cuno_grouping[tr.cuNo] = CustomerGrouping(tr.cuNo, cu_name)
+
+            grouping = cuno_grouping[tr.cuNo]
+            grouping.append(tr)
+            # print(tr)
+    print("===================================================================================")
+    header = CustomerGrouping.csv_column_header(ym_tag_list)
+    csv_rows = [elem.dump_csv_format() for k, elem in cuno_grouping.items()]
+    print(header + csv_rows)
+    return header, csv_rows
+
+
+def multiprocess_evaluation(dt_begin, dt_end, output_base_file_dict, pickle_path, pool, thres_duration_steps,
+                            thres_voltage_steps):
+    """  分配多行程進行平行計算 evaluating_thresholding  """
+    # column_names = ['gno', 'dt_begin', 'dt_end', 'ch', 'avg', 'std', 'th_mv', 'th_min'] + [觸發事件資料]
+    for list_tag, group_list in output_base_file_dict.items():
+        args = product([pickle_path / "{}_{}_{}.pickle".format(elm, dt_begin, dt_end)
+                        for elm in group_list], [thres_voltage_steps], [thres_duration_steps])
+        pool_output = pool.starmap_async(evaluating_thresholding, args, chunksize=24)
+
+        csv_rows = pool_output.get()
+        csv_file = 'occurrence_info_{}.csv'.format(list_tag)
+
+        with open(csv_file, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',', quotechar="'")
+            for rec in csv_rows:
+                for row in rec:
+                    writer.writerow(row)
+
+        print(list_tag, csv_file, "FINISH!")
+
+        devices_map = dict()
+        for gno in group_list:
+            dev = Device(gno)
+            # list 方便後續將多通道整併 例如 RST 分開編號的
+            devices_map["{}__{}__{}".format(dev.cuName, dev.sName, dev.gName)] = [gno]
+
+        # ===========================================================================================================
+        """ 將 csv 轉換成 DataFrame 並給予 欄位名稱 方便後續分析 """
+        csv_file = 'occurrence_info_umc_8s.csv'
+        # https://stackoverflow.com/a/57824142 當預設欄位太少不足以完成自動解析時  將會觸發記憶體不足 可以直接指定一個較大的數值
+        column_names = ['gno', 'dt_begin', 'dt_end', 'ch', 'mean', 'std', 'th_mv', 'th_min'] + [i for i in range(1, 50993)]
+        # 主要需要手動確認是否有一個裝置散佈在多個通道群 (即 RST 三相分開編號) 有的話手動合併 RST 於一個裝置名稱內
+
+        rows = pd.read_csv(csv_file, header=None, delimiter=',', quotechar="'", names=column_names)
+        report = []
+
+        for dev_name, gno_list in devices_map.items():
+            r = []
+            for gno in gno_list:
+                r.append(
+                    rows.assign(if_in_gno_lis=lambda df: df['gno'] == gno)
+                    .loc[lambda df: df['if_in_gno_lis'],]
+                )
+
+            report.append(pd.concat(r, axis=0, ignore_index=True).sort_values(by=['th_mv', 'th_min', 'gno'],
+                                                                              ignore_index=True))
+
+        # ===========================================================================================================
+        f = pd.concat(report, axis=0, ignore_index=True)
+        print(f.shape)
+        with open(Path(csv_file + ".pickle"), 'wb') as pf:
+            pickle.dump(f, pf)
+
+        with open(Path(csv_file+'.pickle'), 'rb') as pf:
+            rows = pickle.load(pf)
+            csv_header, csv_rows = parsing_csv(rows)
+            with open(Path(csv_file.replace('.csv', '_report.csv')), 'w', newline='') as rpt_file:
+                writer = csv.writer(rpt_file, delimiter=',', quotechar="'")
+                for cu in csv_rows:
+                    for dev in cu:
+                        writer.writerow(dev)
+
+
+class TestDumpDevicePickles(unittest.TestCase):
+
+    def test_README(self):
+        """
+            1. 從 PDCare MySQL                        下載對應裝置分析區間的 PICKLE 檔案, 檔案名稱由 gno_{開始時間}_{結束時間} 表示
+            2. 執行 test_load_pickle_analysis         進行不同閾值的觸發次數評估清單 產生 occurrence_info_xxxx.csv
+                                                     將 occurrence_info_xxxx.csv 進行年月次數統計彙整 並給予欄位名稱轉換成 Pandas DataFrame
+                                                     轉換成 DataFrame 並給予蘭為方便後續分析
+                                                     將 pickled DataFrame 進行統計產出 後綴 report 的 CSV 檔案
+        """
+
+    def test_dump(self):
+        tz = timezone(timedelta(hours=+8))
+        sk = StoreKeeper()
+
+        target_list = [
+            # 12AP3P4
+            Device(12870), Device(12871), Device(12872)
+        ]
+
+        for dev in target_list:
+            dev.begin_datetime = datetime.datetime(2023, 6, 1, 0, 0, 0,tzinfo=tz)
+            dev.ending_datetime = datetime.datetime(2024, 5, 31, 0, 0, 0, tzinfo=tz)
+            dev.load_trend_data()
+            sk.pickle_device_data(dev)
+
+    def test_load_pickle_analysis(self):
+        pool = Pool(cpu_count() - 1, maxtasksperchild=10)
+        pickle_path = Path("e:\\src\\pdstats\\data")
+        dt_begin = "20230601000000"
+        dt_end = "20240531000000"
+
+        thres_voltage_steps = [5, 10, 15, 20, 25, 30]
+        thres_duration_steps = [10, 20, 30, 40, 50, 60]
+
+        # 存放所有需要分析的廠區設備清單, key: 客戶名稱, val: 設備列表
+        output_base_file_dict = {'umc_8s': [
+            12276, 12277, 12278, 12279, 12280, 12281, 12282, 12283, 12284, 12285,
+            12286, 12287, 12289, 12290, 12291, 12292, 12293, 12294, 12295, 12296,
+            12297, 12298, 12299, 12300, 12301, 12302, 12332, 12333, 12334, 12335,
+            12336, 12337, 12338, 12339, 12340, 12347, 12364, 12365, 12366, 12367
+        ]}
+
+        multiprocess_evaluation(dt_begin, dt_end, output_base_file_dict, pickle_path, pool, thres_duration_steps,
+                                thres_voltage_steps)
+
+    def test_make_report_csv(self):
+        seec_group_list = [
+            # UMC 8S
+            12276, 12277, 12278, 12279, 12280, 12281, 12282, 12283, 12284, 12285,
+            12286, 12287, 12289, 12290, 12291, 12292, 12293, 12294, 12295, 12296,
+            12297, 12298, 12299, 12300, 12301, 12302, 12332, 12333, 12334, 12335,
+            12336, 12337, 12338, 12339, 12340, 12347, 12364, 12365, 12366, 12367
+        ]
+        output_base_file_dict = {'umc_8s': seec_group_list}
+        csv_file = 'occurrence_info_{}.csv'.format(list(output_base_file_dict.keys())[0])
+        with open(Path(csv_file+'.pickle'), 'rb') as pf:
+            rows = pickle.load(pf)
+            csv_header, csv_rows = parsing_csv(rows)
+            with open(Path(csv_file.replace('.csv', '_report.csv')), 'w', newline='') as rpt_file:
+                writer = csv.writer(rpt_file, delimiter=',', quotechar="'")
+                for cu in csv_rows:
+                    for dev in cu:
+                        writer.writerow(dev)
+
+    def test_redo_analysis(self):
+        csv_file = 'occurrence_info_umc_8s.csv'
+        with open(Path(csv_file+'.pickle'), 'rb') as pf:
+            rows = pickle.load(pf)
+            csv_header, csv_rows = parsing_csv(rows)
+            with open(Path(csv_file.replace('.csv', '_report.csv')), 'w', newline='', encoding='utf-8') as rpt_file:
+                writer = csv.writer(rpt_file, delimiter=',')
+                for cu in csv_rows:
+                    for dev in cu:
+                        writer.writerow(dev)
+
+    def test_pickle_csv(self):
+        """ 列印裝置通道整併清單 """
+        gno_list = [
+            12276, 12277, 12278, 12279, 12280, 12281, 12282, 12283, 12284, 12285,
+            12286, 12287, 12289, 12290, 12291, 12292, 12293, 12294, 12295, 12296,
+            12297, 12298, 12299, 12300, 12301, 12302, 12332, 12333, 12334, 12335,
+            12336, 12337, 12338, 12339, 12340, 12347, 12364, 12365, 12366, 12367]
+
+        devices_map = dict()
+        for gno in gno_list:
+            dev = Device(gno)
+            # list 方便後續將多通道整併 例如 RST 分開編號的
+            devices_map["{}__{}__{}".format(dev.cuName, dev.sName, dev.gName)] = [gno]
+
+        """ 將 csv 轉換成 DataFrame 並給予蘭為方便後續分析 """
+        csv_file = 'occurrence_info_umc_8s.csv'
+        # https://stackoverflow.com/a/57824142 當預設欄位太少不足以完成自動解析時  將會觸發記憶體不足 可以直接指定一個較大的數值
+        column_names = ['gno', 'dt_begin', 'dt_end', 'ch', 'mean', 'std', 'th_mv', 'th_min'] + [i for i in range(1, 50993)]
+        # 主要需要手動確認是否有一個裝置散佈在多個通道群 (即 RST 三相分開編號) 有的話手動合併 RST 於一個裝置名稱內
+
+        rows = pd.read_csv(csv_file, header=None, delimiter=',', quotechar="'", names=column_names)
+        report = []
+
+        for dev_name, gno_list in devices_map.items():
+            r = []
+            for gno in gno_list:
+                r.append(
+                    rows.assign(if_in_gno_lis=lambda df: df['gno'] == gno)
+                    .loc[lambda df: df['if_in_gno_lis'],]
+                )
+
+            report.append(pd.concat(r, axis=0, ignore_index=True).sort_values(by=['th_mv', 'th_min', 'gno'],
+                                                                              ignore_index=True))
+
+        f = pd.concat(report, axis=0, ignore_index=True)
+        print(f.shape)
+        with open(Path(csv_file + ".pickle"), 'wb') as pf:
+            pickle.dump(f, pf)
+
+    def test_eval(self):
+        # UMC 8S
+        gno_list = [
+            12276, 12277, 12278, 12279, 12280, 12281, 12282, 12283, 12284, 12285,
+            12286, 12287, 12289, 12290, 12291, 12292, 12293, 12294, 12295, 12296,
+            12297, 12298, 12299, 12300, 12301, 12302, 12332, 12333, 12334, 12335,
+            12336, 12337, 12338, 12339, 12340, 12347, 12364, 12365, 12366, 12367]
+        for gno in gno_list:
+            result = evaluating_thresholding(Path('e:/src/Pdstats/data/{}_20230601000000_20240531000000.pickle'.format(gno)),
+                                             [120, 240, 480, 600], [30, 300])
+            for comb in result:
+                print(comb[:8], len(comb)-8)
