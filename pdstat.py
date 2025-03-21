@@ -192,6 +192,9 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
                                          str(evaluating_mv) + "mv",
                                          str(max(evaluating_duration_minutes)) + "min", "-1"])
                     continue
+                finally:
+                    dev.trend_data.clear()
+                    ds_dict.clear()
                 try:
                     with open('occurrence_info.csv', 'a', newline='') as csvfile:
                         writer = csv.writer(csvfile, delimiter=',', quotechar="'")
@@ -214,8 +217,6 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
 
 if __name__ == "__main__":
     parser = ArgumentParser(add_help=True)
-    group_file = parser.add_argument_group()
-    group_file.add_argument("--file", help="loading xlsx file exported by PDSimply")
 
     group_exclude = parser.add_mutually_exclusive_group(required=True)
     group_exclude.add_argument("--gno", type=int, help="loading data from PUMO database by the specified group id")
