@@ -275,24 +275,28 @@ class TestUMC8SAnalysis(unittest.TestCase):
         from pathlib import Path
         import statistics
 
-        base_path = "G:\\我的雲端硬碟\\10-temp\\data"
-        xlsx_list = ["Report_Cu56_UMC_8E", "Report_Cu55_UMC_8S", "Report_Cu46_UMC_8F", "Report_Cu45_UMC_8CD",
-                     "Report_Cu35_USC_12x", "Report_Cu35_UMC_SG", "Report_Cu35_UMC_12AP3P4",
-                     "Report_Cu35_UMC_12AP1P2", "Report_Cu35_UMC_8AB", "Report_Cu19_UMC_12AP5"]
+        def mean_std_combined(_row):
+            return _row[1] + _row[2]*5
+
+        base_path = "G:\\我的雲端硬碟\\10-temp\\data\\20250321"
+        xlsx_list = ["JHICC_Evaluating_Report_20250321T122452", "和艦_Evaluating_Report_20250321T154723"]
         total_row_count = 0
 
-        mean_distribution = []
-        std_distribution = []
-        result = []
-
         for xlsx_name in xlsx_list:
+            mean_distribution = []
+            std_distribution = []
+            result = []
             workbook = openpyxl.load_workbook(Path(base_path) / Path(xlsx_name + ".xlsx"))
             worksheet = workbook['Report']
             gno = None
+            sta_name = ""
+            dev_name = ""
             for idx, row in enumerate(worksheet.rows):
                 try:
                     if row[0].value is not None:
                         gno = int(str(row[0].value).split("_")[0])
+                        sta_name = str(row[7].value).strip()
+                        dev_name = str(row[8].value).strip()
                         continue
 
                     if (row[1].value in [1, 2, 3, 4, 5, 6] and row[2].value is not None and
@@ -301,33 +305,33 @@ class TestUMC8SAnalysis(unittest.TestCase):
                         total_row_count = total_row_count + 1
                         mean_distribution.append(row[2].value)
                         std_distribution.append(row[3].value)
-                        result.append([gno, row[2].value, row[3].value])
+                        result.append([gno, row[2].value, row[3].value, sta_name, dev_name])
                 except ValueError:
                     print(xlsx_name, idx, [cell.value for cell in row])
                     continue
 
-        print("total row counts = {}".format(total_row_count))
-        print("average mv = {}, average std = {}".format(statistics.mean(mean_distribution), statistics.mean(std_distribution)))
+            print("total row counts = {}".format(total_row_count))
+            print("average mv = {}, average std = {}".format(statistics.mean(mean_distribution), statistics.mean(std_distribution)))
+            print("Mean Max: {}, Std Max: {}".format(max(mean_distribution), max(std_distribution)))
+            print("exceed >= 30mV, #={}".format([(elem >= 30.0) for elem in mean_distribution].count(True)))
+            print("exceed >= 25mV, #={}".format([(elem >= 25.0) for elem in mean_distribution].count(True)))
+            print("exceed >= 20mV, #={}".format([(elem >= 20.0) for elem in mean_distribution].count(True)))
+            print("exceed >= 15mV, #={}".format([(elem >= 15.0) for elem in mean_distribution].count(True)))
+            print("exceed >= 10mV, #={}".format([(elem >= 10.0) for elem in mean_distribution].count(True)))
 
-        print("exceed >= 30mV, #={}".format([(elem >= 30.0) for elem in mean_distribution].count(True)))
-        print("exceed >= 25mV, #={}".format([(elem >= 25.0) for elem in mean_distribution].count(True)))
-        print("exceed >= 20mV, #={}".format([(elem >= 20.0) for elem in mean_distribution].count(True)))
-        print("exceed >= 15mV, #={}".format([(elem >= 15.0) for elem in mean_distribution].count(True)))
-        print("exceed >= 10mV, #={}".format([(elem >= 10.0) for elem in mean_distribution].count(True)))
+            fig, ax = plt.subplots(figsize=(4, 3))
+            sc = ax.scatter(mean_distribution, std_distribution, marker="o", s=12, edgecolors="none", alpha=0.25)
+            sc.set_facecolor("red")
+            ax.set_xlabel("mean")
+            ax.set_ylabel("std")
 
-        fig, ax = plt.subplots(figsize=(4, 3))
-        sc = ax.scatter(mean_distribution, std_distribution, marker="o", s=12, edgecolors="none", alpha=0.25)
-        sc.set_facecolor("red")
-        ax.set_xlabel("mean")
-        ax.set_ylabel("std")
+            plt.xlim(0, max(mean_distribution) + 1)
+            plt.ylim(0, max(std_distribution) + 1)
+            plt.savefig("result_{}.png".format(xlsx_name), bbox_inches='tight')
 
-        plt.xlim(0, 20)
-        plt.ylim(0, 10)
-        plt.show()
-
-        with open("result.csv", "w", newline="\n") as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerows(result)
+            with open("result_{}.csv".format(xlsx_name), "w", newline="\n", encoding='utf-8') as csv_file:
+                writer = csv.writer(csv_file)
+                writer.writerows(sorted(result, key=mean_std_combined))
 
     def test_evaluating_by_device_type(self):
         import openpyxl

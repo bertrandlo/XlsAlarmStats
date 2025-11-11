@@ -17,6 +17,9 @@ from pdcomponent.station import Station
 from pdcomponent.device import Device
 
 
+APP_VERSION = "2.3.03211300"
+
+
 def main(filename):
     df = DataImporter.xls_import(filename)
     for idx, col in enumerate(df.columns):
@@ -194,7 +197,6 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
                     continue
                 finally:
                     dev.trend_data.clear()
-                    ds_dict.clear()
                 try:
                     with open('occurrence_info.csv', 'a', newline='') as csvfile:
                         writer = csv.writer(csvfile, delimiter=',', quotechar="'")
@@ -212,11 +214,15 @@ def evaluating_thresholding(report_name: str, target_list: list, dt_begin, dt_en
                     ws.cell(row_offset, 4 + idx).value = 0
 
         row_offset = row_offset + 5
+        wb.save("{}_temp.xlsx".format(report_name))
     wb.save("{}_{}.xlsx".format(report_name, datetime.now().strftime("%Y%m%dT%H%M%S")))
 
 
 if __name__ == "__main__":
     parser = ArgumentParser(add_help=True)
+    print("PDStat version={}".format(APP_VERSION))
+    with open("version.ini", "w") as text_file:
+        text_file.write("PDStat version={}".format(APP_VERSION))
 
     group_exclude = parser.add_mutually_exclusive_group(required=True)
     group_exclude.add_argument("--gno", type=int, help="loading data from PUMO database by the specified group id")
